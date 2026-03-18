@@ -2,7 +2,7 @@ const User = require("../models/User");
 const admin = require("../config/firebase");
 
 // ✅ Save FCM Token
-router.post("/save-token", async (req, res) => {
+exports.saveToken = async (req, res) => {
     try {
         const { userId, token } = req.body;
 
@@ -25,9 +25,10 @@ router.post("/save-token", async (req, res) => {
         console.error("Save token error:", error);
         res.status(500).json({ message: "Server error" });
     }
-});
+};
 
-// ✅ Send Notification
+
+// ✅ Send Notification (keep this as helper function)
 exports.sendNotification = async (receiverId, text) => {
     try {
         const user = await User.findById(receiverId);
