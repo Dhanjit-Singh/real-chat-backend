@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const admin = require("../config/firebase");
+const Chat = require("../models/Chat");
 
 // ✅ Save FCM Token
 exports.saveToken = async (req, res) => {
@@ -45,5 +46,34 @@ exports.sendNotification = async (receiverId, text) => {
 
     } catch (error) {
         console.error("FCM Error:", error);
+    }
+};
+
+exports.sendMessage = async (req, res) => {
+    try {
+        const { chat, text, sender } = req.body;
+
+        const message = await Message.create({
+            chat,
+            sender,
+            text
+        });
+
+        // ✅ Get chat users
+        const chatData = await Chat.findById(chat);
+
+        // ✅ Find receiver (not sender)
+        const receiverId = chatData.users.find(
+            (userId) => userId.toString() !== sender
+        );
+
+        // ✅ Send notification
+        await sendNotification(receiverId, text);
+
+        res.json(message);
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
     }
 };

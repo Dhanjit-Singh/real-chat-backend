@@ -1,5 +1,6 @@
 const Message = require("../models/Message");
 const { sendNotification } = require("./notification.controller");
+const Chat = require("../models/Chat");
 
 exports.sendMessage = async (req, res) => {
 
@@ -12,6 +13,10 @@ exports.sendMessage = async (req, res) => {
             text
         });
 
+        const chatData = await Chat.findById(chat);
+        const receiverId = chatData.users.find(
+            (userId) => userId.toString() !== sender
+        );
         await sendNotification(receiverId, text);
 
         res.json(message);
