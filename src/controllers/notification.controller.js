@@ -17,7 +17,13 @@ exports.saveToken = async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
-        user.fcmToken = token;
+        if (!user.fcmTokens) {
+            user.fcmTokens = [];
+        }
+
+        if (!user.fcmTokens.includes(token)) {
+            user.fcmTokens.push(token);
+        }
         await user.save();
 
         res.json({ message: "Token saved successfully" });
@@ -34,15 +40,25 @@ exports.sendNotification = async (receiverId, text) => {
     try {
         const user = await User.findById(receiverId);
 
-        if (!user?.fcmToken) return;
+        if (!user?.fcmTokens || user.fcmTokens.length === 0) return;
 
-        await admin.messaging().send({
-            token: user.fcmToken,
+        // await admin.messaging().send({
+        //     tokens: user.fcmTokens,
+        //     notification: {
+        //         title: "New Message",
+        //         body: text,
+        //     },
+        // });
+
+        const response = await admin.messaging().sendEachForMulticast({
+            tokens: user.fcmTokens,
             notification: {
                 title: "New Message",
                 body: text,
             },
         });
+
+        console.log("FCM Response:", response);
 
     } catch (error) {
         console.error("FCM Error:", error);
