@@ -106,11 +106,19 @@ exports.login = async (req, res) => {
 
 exports.logout = async (req, res) => {
     try {
-        const { userId } = req.body;
+        const { userId, token } = req.body;
         if (userId) {
-            await User.findByIdAndUpdate(userId, {
-                lastSeen: new Date()
-            });
+            const user = await User.findById(userId);
+            if(user) {
+                if (token && user.fcmTokens) {
+                    user.fcmTokens = user.fcmTokens.filter(t => t !== token);
+                }
+                user.lastSeen = new Date();
+                await user.save();
+            }
+            // await User.findByIdAndUpdate(userId, {
+            //     lastSeen: new Date()
+            // });
         }
         return res.status(200).json({
             status: true,
