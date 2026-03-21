@@ -40,15 +40,9 @@ exports.sendNotification = async (receiverId, text) => {
     try {
         const user = await User.findById(receiverId);
 
-        if (!user?.fcmTokens || user.fcmTokens.length === 0) return;
-
-        // await admin.messaging().send({
-        //     tokens: user.fcmTokens,
-        //     notification: {
-        //         title: "New Message",
-        //         body: text,
-        //     },
-        // });
+        if (!user?.fcmTokens || user.fcmTokens.length === 0) {
+            return;
+        }
 
         const response = await admin.messaging().sendEachForMulticast({
             tokens: user.fcmTokens,
@@ -59,6 +53,14 @@ exports.sendNotification = async (receiverId, text) => {
         });
 
         console.log("FCM Response:", response);
+
+        response.responses.forEach((res, index) => {
+            if (!res.success) {
+                user.fcmTokens.splice(index, 1);
+            }
+        });
+
+        await user.save();
 
     } catch (error) {
         console.error("FCM Error:", error);
@@ -84,7 +86,8 @@ exports.sendMessage = async (req, res) => {
         );
 
         // ✅ Send notification
-        await sendNotification(receiverId, text);
+        // await sendNotification(receiverId, text);
+        await exports.sendNotification(receiverId, text);
 
         res.json(message);
 
