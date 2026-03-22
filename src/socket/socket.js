@@ -1,43 +1,10 @@
 const { Server, Socket } = require("socket.io");
 const Message = require("../models/Message");
 const User = require("../models/User");
-
-
-// module.exports = (server) => {
-//     const io = new Server(server, {
-//         cors: { origin: "http://localhost:3000" },
-//     });
-
-//     io.on("connection", (socket) => {
-//         console.log("User connected:", socket.id);
-
-//         socket.on("joinChat", (chatId) => {
-//             socket.join(chatId);
-//         });
-
-//         socket.on("sendMessage", async ({ chatId, senderId, text }) => {
-//             if (!text?.trim()) return;
-
-//             const message = await Message.create({
-//                 chat: chatId,
-//                 sender: senderId,
-//                 text,
-//             });
-
-//             io.to(chatId).emit("receiveMessage", message);
-//         });
-
-//         socket.on("disconnect", () => {
-//             console.log("User disconnected");
-//         });
-//     });
-// };
-
-
+const Chat = require("../models/Chat");
 
 module.exports = (server) => {
     const io = new Server(server, {
-        // cors: { origin: "http://localhost:3000" },
         cors: {
             origin: [
                 "http://localhost:3000",
@@ -73,6 +40,27 @@ module.exports = (server) => {
                 sender: senderId,
                 text,
             });
+
+            await Chat.findByIdAndUpdate(chatId, {
+                lastMessage: message._id
+            });
+
+            const chat = await Chat.findById(chatId);
+
+            for (let userId of chat.users) {
+                if (userId.toString() === senderId) continue;
+
+                await User.findByIdAndUpdate(userId, {
+                    $inc: { [`unreadMessages.${senderId}`]: 1 }
+                });
+
+                const receiverSocket = onlineUsers.get(userId.toString());
+                if (receiverSocket) {
+                    io.to(receiverSocket).emit("unread_update", {
+                        senderId
+                    });
+                }
+            }
 
             io.to(chatId).emit("receiveMessage", message);
         });

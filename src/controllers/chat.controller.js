@@ -1,4 +1,5 @@
 const Chat = require("../models/Chat");
+const User = require("../models/User");
 
 exports.createChat = async (req, res) => {
     const chat = await Chat.create({ users: req.body.users });
@@ -62,6 +63,13 @@ exports.createOrGetChat = async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+};
 
+exports.resetUnreadChat = async (req, res) => {
+    const { senderId, userId } = req.body;
+    await User.findByIdAndUpdate(userId, {
+        $set: { [`unreadMessages.${senderId}`]: 0 }
+    });
 
+    res.json({ success: true });
 };

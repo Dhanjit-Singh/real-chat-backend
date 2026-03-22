@@ -5,6 +5,11 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String,
     lastSeen: Date,
+    unreadMessages: {
+        type: Map,
+        of: Number,
+        default: {}
+    },
     fcmTokens: [
         {
             type: String,

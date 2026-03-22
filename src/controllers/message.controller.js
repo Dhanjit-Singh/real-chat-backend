@@ -17,6 +17,7 @@ exports.sendMessage = async (req, res) => {
         const receiverId = chatData.users.find(
             (userId) => userId.toString() !== sender
         );
+        
         await sendNotification(receiverId, text);
 
         res.json(message);

@@ -109,7 +109,7 @@ exports.logout = async (req, res) => {
         const { userId, token } = req.body;
         if (userId) {
             const user = await User.findById(userId);
-            if(user) {
+            if (user) {
                 if (token && user.fcmTokens) {
                     user.fcmTokens = user.fcmTokens.filter(t => t !== token);
                 }
@@ -132,6 +132,32 @@ exports.logout = async (req, res) => {
     }
 };
 
+// exports.getUsers = async (req, res) => {
+//     res.json(await User.find());
+// };
+
 exports.getUsers = async (req, res) => {
-    res.json(await User.find());
+    try {
+        const loggedInUserId = req.query.userId;
+        if (!loggedInUserId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+
+        const users = await User.find();
+        const currentUser = await User.findById(loggedInUserId);
+        if (!currentUser) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        const updatedUsers = users.map(user => ({
+            ...user.toObject(),
+
+            unreadCount:
+                currentUser.unreadMessages?.get(user._id.toString()) || 0
+        }));
+
+        res.json(updatedUsers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
+    }
 };
