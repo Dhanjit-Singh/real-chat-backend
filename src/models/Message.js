@@ -16,10 +16,17 @@ const messageSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
-        seen: {
-            type: Boolean,
-            default: false
+        messageType: {
+            type: String,
+            enum: ["text", "image", "video", "file"],
+            default: "text"
         },
+        readBy: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ],
     },
     { timestamps: true }
 );

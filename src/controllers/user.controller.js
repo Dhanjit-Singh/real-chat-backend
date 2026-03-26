@@ -3,11 +3,12 @@ require("dotenv").config();
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const Chat = require("../models/Chat");
 
 exports.createUser = async (req, res) => {
     try {
 
-        const { name, email, password } = req.body;
+        let { name, email, password } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({
@@ -16,6 +17,7 @@ exports.createUser = async (req, res) => {
             });
         }
 
+        email = email.trim().toLowerCase();
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(409).json({
@@ -53,15 +55,16 @@ exports.createUser = async (req, res) => {
 exports.login = async (req, res) => {
     try {
 
-        const { email, password } = req.body;
+        let { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(401).json({
+            return res.status(400).json({
                 status: false,
                 message: "Email and password required",
             });
         }
 
+        email = email.trim().toLowerCase();
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(401).json({
@@ -83,6 +86,10 @@ exports.login = async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
         );
+
+        user.lastSeen = null;
+        user.isOnline = true;
+        await user.save();
 
         return res.status(200).json({
             status: true,
@@ -106,19 +113,17 @@ exports.login = async (req, res) => {
 
 exports.logout = async (req, res) => {
     try {
-        const { userId, token } = req.body;
+        const { userId, fcmToken } = req.body;
         if (userId) {
             const user = await User.findById(userId);
             if (user) {
-                if (token && user.fcmTokens) {
-                    user.fcmTokens = user.fcmTokens.filter(t => t !== token);
+                if (fcmToken) {
+                    user.fcmTokens = user.fcmTokens.filter(t => t !== fcmToken);
                 }
                 user.lastSeen = new Date();
+                user.isOnline = false;
                 await user.save();
             }
-            // await User.findByIdAndUpdate(userId, {
-            //     lastSeen: new Date()
-            // });
         }
         return res.status(200).json({
             status: true,
@@ -132,32 +137,112 @@ exports.logout = async (req, res) => {
     }
 };
 
-// exports.getUsers = async (req, res) => {
-//     res.json(await User.find());
-// };
-
-exports.getUsers = async (req, res) => {
+exports.getContacts = async (req, res) => {
     try {
-        const loggedInUserId = req.query.userId;
-        if (!loggedInUserId) {
-            return res.status(400).json({ error: "userId is required" });
+        const { userId } = req.query;
+
+        if (!userId) {
+            return res.status(400).json({
+                status: false,
+                message: "userId is required"
+            });
         }
 
-        const users = await User.find();
-        const currentUser = await User.findById(loggedInUserId);
-        if (!currentUser) {
-            return res.status(404).json({ error: "User not found" });
-        }
-        const updatedUsers = users.map(user => ({
-            ...user.toObject(),
+        const user = await User.findById(userId)
+            .populate("contacts", "name email");
 
+        if (!user) {
+            return res.status(404).json({
+                status: false,
+                message: "User not found"
+            });
+        }
+
+        const contactsWithUnread = user.contacts.map(contact => ({
+            ...contact.toObject(),
             unreadCount:
-                currentUser.unreadMessages?.get(user._id.toString()) || 0
+                user.unreadMessages?.get(contact._id.toString()) || 0
         }));
 
-        res.json(updatedUsers);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
+        return res.json({
+            status: true,
+            data: contactsWithUnread
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            status: false,
+            message: "Server error"
+        });
+    }
+};
+
+
+exports.addFriend = async (req, res) => {
+    try {
+        const { userId, email, name } = req.body;
+
+        if (!userId || (!email && !name)) {
+            return res.status(400).json({
+                status: false,
+                message: "userId and (email or name) are required"
+            });
+        }
+
+        const friend = await User.findOne({
+            $or: [
+                email ? { email } : null,
+                name ? { name } : null
+            ].filter(Boolean)
+        });
+
+        if (!friend) {
+            return res.status(404).json({
+                status: false,
+                message: "Friend not found"
+            });
+        }
+
+        if (friend._id.toString() === userId) {
+            return res.status(400).json({
+                status: false,
+                message: "Cannot add yourself"
+            });
+        }
+
+        // ✅ CHECK CHAT FIRST
+        let chat = await Chat.findOne({
+            users: { $all: [userId, friend._id] }
+        });
+
+        // ✅ CREATE CHAT IF NOT EXISTS
+        if (!chat) {
+            chat = await Chat.create({
+                users: [userId, friend._id],
+                lastMessage: null,
+                unreadCount: 0
+            });
+        }
+
+        // ✅ OPTIONAL: Friend logic (if you store friends)
+        // Don't block response here
+
+        return res.status(200).json({
+            status: true,
+            message: chat ? "Chat ready" : "Friend added successfully",
+            friend: {
+                id: friend._id,
+                name: friend.name,
+                email: friend.email
+            },
+            chat
+        });
+
+    } catch (error) {
+        console.log("addFriend error:", error);
+        res.status(500).json({
+            status: false,
+            message: "Server error"
+        });
     }
 };
