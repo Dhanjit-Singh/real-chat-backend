@@ -92,7 +92,7 @@ exports.login = async (req, res) => {
 
         return res.status(200).json({
             status: true,
-            message: "User logged in successfully.",
+            message: "Logged in successfully.",
             token,
             user: {
                 id: user._id,
@@ -275,7 +275,7 @@ exports.getUser = async (req, res) => {
             message: "User fetched successfully.",
             data: userDetails
         });
-        
+
     } catch (error) {
         console.log("Error while getting user:", error);
         res.status(500).json({
