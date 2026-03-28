@@ -1,4 +1,3 @@
-// const User = require("../models/User");
 require("dotenv").config();
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
@@ -240,6 +239,45 @@ exports.addFriend = async (req, res) => {
 
     } catch (error) {
         console.log("addFriend error:", error);
+        res.status(500).json({
+            status: false,
+            message: "Server error"
+        });
+    }
+};
+
+exports.getUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(404).json({
+                status: false,
+                message: "userId is required"
+            });
+        }
+
+        const user = await User.findById(userId);
+        if(!user) {
+            return res.status(404).json({
+                status: false,
+                message: "User not found!",
+            });
+        }
+
+        const userDetails = {
+            name: user.name,
+            email: user.email,
+            lastSeen: user.lastSeen
+        };
+
+        return res.status(200).json({
+            status: true,
+            message: "User fetched successfully.",
+            data: userDetails
+        });
+        
+    } catch (error) {
+        console.log("Error while getting user:", error);
         res.status(500).json({
             status: false,
             message: "Server error"
