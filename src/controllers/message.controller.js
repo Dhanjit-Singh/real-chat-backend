@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const Chat = require("../models/Chat");
 const User = require("../models/User");
+const cloudinary = require("../config/cloudinary");
+const streamifier = require('streamifier');
 const path = require("path");
 const fs = require("fs");
 const { sendNotification } = require("./notification.controller");
@@ -110,7 +112,33 @@ exports.sendImage = async (req, res) => {
             });
         }
 
-        const imageUrl = `/uploads/images/${imageFile.filename}`;
+        const uploadResult = await new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+                {
+                    folder: 'chat-images', // Folder name in Cloudinary
+                    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+                    transformation: [
+                        { width: 1200, height: 1200, crop: 'limit' }, // Resize if needed
+                        { quality: 'auto' } // Auto compress
+                    ],
+                    format: 'webp', // Convert to webp for better compression
+                },
+                (error, result) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(result);
+                    }
+                }
+            );
+            
+            // Create stream from buffer and pipe to Cloudinary
+            streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+        });
+
+        // const imageUrl = `/uploads/images/${imageFile.filename}`;
+        const imageUrl = uploadResult.secure_url;
+        const imagePublicId = uploadResult.public_id;
 
         let message = await Message.create({
             sender: senderId,
@@ -120,6 +148,7 @@ exports.sendImage = async (req, res) => {
             imageUrl: imageUrl,
             imageName: imageFile.originalname,
             imageSize: imageFile.size,
+            imagePublicId: imagePublicId,
             readBy: [senderId]
         });
 
@@ -179,17 +208,29 @@ exports.deleteImage = async (req, res) => {
                 message: "Not authorized to delete this message"
             });
         }
-        
-        // Delete the physical file
-        if (message.imageUrl) {
-            const imagePath = path.join(__dirname, "..", message.imageUrl);
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
+
+        if (message.imagePublicId) {
+            try {
+                await cloudinary.uploader.destroy(message.imagePublicId);
+                console.log("Image deleted from Cloudinary:", message.imagePublicId);
+            } catch (cloudinaryError) {
+                console.error("Error deleting from Cloudinary:", cloudinaryError);
             }
         }
-        
-        // Delete the message
+
+        // Delete the message from database
         await Message.findByIdAndDelete(messageId);
+        
+        // Delete the physical file
+        // if (message.imageUrl) {
+        //     const imagePath = path.join(__dirname, "..", message.imageUrl);
+        //     if (fs.existsSync(imagePath)) {
+        //         fs.unlinkSync(imagePath);
+        //     }
+        // }
+        
+        // // Delete the message
+        // await Message.findByIdAndDelete(messageId);
         
         res.json({
             status: true,

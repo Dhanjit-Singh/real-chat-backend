@@ -34,6 +34,10 @@ const messageSchema = new mongoose.Schema(
             type: Number,
             default: null
         },
+        imagePublicId: {  // Add this field for Cloudinary
+            type: String,
+            default: null
+        },
         readBy: [
             {
                 type: mongoose.Schema.Types.ObjectId,
