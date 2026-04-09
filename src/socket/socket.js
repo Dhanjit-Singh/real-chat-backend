@@ -105,6 +105,111 @@ module.exports = (server) => {
         });
 
         // =========================
+        // SEND IMAGE
+        // =========================
+        socket.on("sendImage", async ({ chatId, senderId, imageUrl, imageName, imageSize, messageId }) => {
+            if (!chatId || !senderId || !imageUrl) return;
+
+            try {
+                const chat = await Chat.findById(chatId);
+
+                // Emit image to chat room
+                io.to(chatId).emit("receiveImage", {
+                    _id: messageId,
+                    sender: senderId,
+                    chat: chatId,
+                    imageUrl,
+                    imageName,
+                    imageSize,
+                    messageType: "image",
+                    createdAt: new Date()
+                });
+
+                // Also send to individual users
+                for (let userId of chat.users) {
+                    const receiverSocket = onlineUsers.get(userId.toString());
+                    if (receiverSocket) {
+                        io.to(receiverSocket).emit("receiveImage", {
+                            _id: messageId,
+                            sender: senderId,
+                            chat: chatId,
+                            imageUrl,
+                            imageName,
+                            imageSize,
+                            messageType: "image",
+                            createdAt: new Date()
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error("❌ sendImage error:", error);
+            }
+        });
+
+        // =========================
+        // CALL HANDLERS
+        // =========================
+
+        // Initiate a call
+        socket.on("initiate-call", ({ to, from, fromName, chatId, callType }) => {
+            const receiverSocket = onlineUsers.get(to);
+
+            if (receiverSocket) {
+                console.log(`📞 Call initiated from ${from} to ${to}, type: ${callType}`);
+                io.to(receiverSocket).emit("incoming-call", {
+                    from,
+                    fromName,
+                    chatId,
+                    callType
+                });
+            } else {
+                // User is offline
+                socket.emit("call-error", {
+                    message: "User is offline"
+                });
+            }
+        });
+
+        // Accept a call
+        socket.on("accept-call", ({ to, from, chatId }) => {
+            const callerSocket = onlineUsers.get(to);
+
+            if (callerSocket) {
+                console.log(`📞 Call accepted from ${from} to ${to}`);
+                io.to(callerSocket).emit("call-accepted", {
+                    from,
+                    chatId
+                });
+            }
+        });
+
+        // Reject a call
+        socket.on("reject-call", ({ to, from, chatId }) => {
+            const receiverSocket = onlineUsers.get(to);
+
+            if (receiverSocket) {
+                console.log(`📞 Call rejected from ${from} to ${to}`);
+                io.to(receiverSocket).emit("call-rejected", {
+                    from,
+                    chatId
+                });
+            }
+        });
+
+        // End a call
+        socket.on("end-call", ({ to, from, chatId }) => {
+            const receiverSocket = onlineUsers.get(to);
+
+            if (receiverSocket) {
+                console.log(`📞 Call ended from ${from} to ${to}`);
+                io.to(receiverSocket).emit("call-ended", {
+                    from,
+                    chatId
+                });
+            }
+        });
+
+        // =========================
         // DISCONNECT
         // =========================
         socket.on("disconnect", async () => {
