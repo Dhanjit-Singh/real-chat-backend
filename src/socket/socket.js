@@ -154,6 +154,9 @@ module.exports = (server) => {
         socket.on("initiate-call", ({ to, from, fromName, chatId, callType }) => {
             const receiverSocket = onlineUsers.get(to);
 
+            console.log(`📞 Initiate call from ${from} to ${to}, type: ${callType}`);
+            console.log(`Receiver socket exists: ${!!receiverSocket}`);
+
             if (receiverSocket) {
                 console.log(`📞 Call initiated from ${from} to ${to}, type: ${callType}`);
                 io.to(receiverSocket).emit("incoming-call", {
@@ -162,8 +165,16 @@ module.exports = (server) => {
                     chatId,
                     callType
                 });
+
+                // Also emit to caller that call is being initiated
+                socket.emit("call-initiated", {
+                    to,
+                    chatId,
+                    callType
+                });
             } else {
                 // User is offline
+                console.log(`User ${to} is offline`);
                 socket.emit("call-error", {
                     message: "User is offline"
                 });
@@ -174,11 +185,30 @@ module.exports = (server) => {
         socket.on("accept-call", ({ to, from, chatId }) => {
             const callerSocket = onlineUsers.get(to);
 
+            console.log(`📞 Accept call - Caller socket: ${callerSocket}`);
+            console.log(`From: ${from}, To: ${to}`);
+
             if (callerSocket) {
                 console.log(`📞 Call accepted from ${from} to ${to}`);
                 io.to(callerSocket).emit("call-accepted", {
                     from,
                     chatId
+                });
+            } else {
+                console.log(`Caller ${to} not found in online users`);
+                socket.emit("call-error", {
+                    message: "Caller is no longer online"
+                });
+            }
+        });
+
+        // Add video track negotiation helper
+        socket.on("negotiate-video", ({ to, from, sdp }) => {
+            const targetSocket = onlineUsers.get(to);
+            if (targetSocket) {
+                io.to(targetSocket).emit("video-negotiation", {
+                    from,
+                    sdp
                 });
             }
         });
