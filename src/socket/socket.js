@@ -45,62 +45,121 @@ module.exports = (server) => {
         // =========================
         // SEND MESSAGE (MAIN LOGIC)
         // =========================
+        // socket.on("sendMessage", async ({ chatId, senderId, text }) => {
+        //     if (!chatId || !senderId || !text?.trim()) return;
+
+        //     try {
+        //         // console.log("📨 New message:", text);
+
+        //         // 1️⃣ Create message
+        //         let message = await Message.create({
+        //             chat: chatId,
+        //             sender: senderId,
+        //             text,
+        //         });
+
+        //         // 2️⃣ Populate sender
+        //         message = await message.populate("sender", "name email");
+
+        //         // 3️⃣ Update chat
+        //         await Chat.findByIdAndUpdate(chatId, {
+        //             lastMessage: message._id,
+        //             updatedAt: new Date()
+        //         });
+
+        //         // 4️⃣ Get chat users
+        //         const chat = await Chat.findById(chatId);
+
+        //         // 5️⃣ Update unread for other users
+        //         for (let userId of chat.users) {
+        //             if (userId.toString() === senderId) continue;
+
+        //             // increment unread count
+        //             await User.findByIdAndUpdate(userId, {
+        //                 $inc: { [`unreadMessages.${senderId}`]: 1 }
+        //             });
+
+        //             // send unread notification
+        //             const receiverSocket = onlineUsers.get(userId.toString());
+
+        //             if (receiverSocket) {
+        //                 io.to(receiverSocket).emit("unread_update", {
+        //                     senderId
+        //                 });
+        //             }
+        //         }
+
+        //         // 6️⃣ Emit message to chat room
+        //         io.to(chatId).emit("receiveMessage", message);
+        //         for (let userId of chat.users) {
+        //             const receiverSocket = onlineUsers.get(userId.toString());
+
+        //             if (receiverSocket) {
+        //                 io.to(receiverSocket).emit("receiveMessage", message);
+        //             }
+        //         }
+
+        //     } catch (error) {
+        //         console.error("❌ sendMessage error:", error);
+        //     }
+        // });
+
+
         socket.on("sendMessage", async ({ chatId, senderId, text }) => {
             if (!chatId || !senderId || !text?.trim()) return;
 
             try {
-                // console.log("📨 New message:", text);
 
-                // 1️⃣ Create message
                 let message = await Message.create({
                     chat: chatId,
                     sender: senderId,
                     text,
                 });
 
-                // 2️⃣ Populate sender
                 message = await message.populate("sender", "name email");
 
-                // 3️⃣ Update chat
-                await Chat.findByIdAndUpdate(chatId, {
-                    lastMessage: message._id,
-                    updatedAt: new Date()
-                });
-
-                // 4️⃣ Get chat users
-                const chat = await Chat.findById(chatId);
-
-                // 5️⃣ Update unread for other users
-                for (let userId of chat.users) {
-                    if (userId.toString() === senderId) continue;
-
-                    // increment unread count
-                    await User.findByIdAndUpdate(userId, {
-                        $inc: { [`unreadMessages.${senderId}`]: 1 }
-                    });
-
-                    // send unread notification
-                    const receiverSocket = onlineUsers.get(userId.toString());
-
-                    if (receiverSocket) {
-                        io.to(receiverSocket).emit("unread_update", {
-                            senderId
-                        });
-                    }
-                }
-
-                // 6️⃣ Emit message to chat room
+                // 🚀 SEND IMMEDIATELY
                 io.to(chatId).emit("receiveMessage", message);
-                for (let userId of chat.users) {
-                    const receiverSocket = onlineUsers.get(userId.toString());
 
-                    if (receiverSocket) {
-                        io.to(receiverSocket).emit("receiveMessage", message);
+                // Run remaining tasks in background
+                (async () => {
+                    try {
+
+                        await Chat.findByIdAndUpdate(chatId, {
+                            lastMessage: message._id,
+                            updatedAt: new Date()
+                        });
+
+                        const chat = await Chat.findById(chatId);
+
+                        for (let userId of chat.users) {
+
+                            if (userId.toString() === senderId) continue;
+
+                            await User.findByIdAndUpdate(userId, {
+                                $inc: {
+                                    [`unreadMessages.${senderId}`]: 1
+                                }
+                            });
+
+                            const receiverSocket =
+                                onlineUsers.get(userId.toString());
+
+                            if (receiverSocket) {
+                                io.to(receiverSocket).emit(
+                                    "unread_update",
+                                    { senderId }
+                                );
+                            }
+                        }
+
+                    } catch (err) {
+                        console.error(err);
                     }
-                }
+                })();
 
             } catch (error) {
-                console.error("❌ sendMessage error:", error);
+                console.error(error);
             }
         });
 
