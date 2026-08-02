@@ -6,10 +6,11 @@ const Chat = require("../models/Chat");
 module.exports = (server) => {
     const io = new Server(server, {
         cors: {
-            origin: [
-                "http://localhost:3000",
-                "https://dhanjit-singh.github.io",
-            ],
+            // origin: [
+            //     "http://localhost:3000",
+            //     "https://dhanjit-singh.github.io",
+            // ],
+            origin: "*",
             methods: ["GET", "POST"],
             credentials: true
         },
